@@ -206,7 +206,6 @@ out_phi = File(out_dir + "phi.pvd")
 out_dphi_ds = File(out_dir + "dphi_ds.pvd")
 out_pfo = File(out_dir + "pfo.pvd")
 out_S = File(out_dir + "S.pvd")
-out_q = File(out_dir + "q.pvd")
 
 # Output some of the static functions as well
 File(out_dir + "B.pvd") << B
@@ -218,7 +217,7 @@ File(out_dir + "phi_init.pvd") << phi_init
 
 # Create some facet functions to display functions defined on channel edges
 S_f = FacetFunction('double',mesh)
-
+dphi_ds_f = FacetFunction('double', mesh)
 
 ### Run the simulation
 
@@ -240,13 +239,15 @@ while ode_solver.t <= T :
   
   if i % 1 == 0:
     # Output a bunch of stuff
-    out_h << h
-    out_phi << phi
+    #out_h << h
+    #out_phi << phi
     out_pfo << pfo
 
-    # Copy some functions to facet functions for display purposes
     cr_tools.copy_cr_to_facet(S, S_f)
     out_S << S_f
+    
+    cr_tools.copy_cr_to_facet(dphi_ds_e, dphi_ds_f)
+    out_dphi_ds << dphi_ds_f
     
   # Checkpoint
   if i % 20 == 0:
