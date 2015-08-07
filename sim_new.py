@@ -132,7 +132,8 @@ def derive_values():
   # Get potential as an array
   phi_n = phi.vector().array()
   # Derive effective pressure
-  N.vector()[:] = phi_0_n - phi_n
+  N.vector().set_local(phi_0_n - phi_n)
+  N.vector().apply("insert")
   # Set the downstream direction based on phi
   cr_tools.midpoint(N, N_e)
   # Compute derivative of potential along channels
@@ -241,7 +242,7 @@ while ode_solver.t <= T :
     # Output a bunch of stuff
     #out_h << h
     #out_phi << phi
-    out_pfo << pfo
+    #out_pfo << pfo
 
     cr_tools.copy_cr_to_facet(S, S_f)
     out_S << S_f
