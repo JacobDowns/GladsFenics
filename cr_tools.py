@@ -13,6 +13,8 @@ class CRTools(object):
     self.V_cr = V_cr
     # Parallel maps input directory
     self.maps_dir = maps_dir
+    # Process
+    self.MPI_rank = MPI.rank(mpi_comm_world())
     
     # Load in some functions that help do stuff in parallel
     self.load_maps()
@@ -20,6 +22,9 @@ class CRTools(object):
     self.compute_lf_ge_map()
     # Create maps from local edges to global vertex dofs
     self.compute_le_gv_maps()
+    
+    f = Function(self.V_cr)
+    self.ds(self.f_cg, f)
     
   # Copies a CR function to a facet function
   def copy_cr_to_facet(self, cr, ff) :
@@ -29,6 +34,7 @@ class CRTools(object):
     # Get the edge values corresponding to each local facet
     local_vals = cr_vals[self.lf_ge]    
     ff.array()[:] = local_vals
+     
   
   # Compute a map from local facets to indexes in a global array of edge values
   def compute_lf_ge_map(self):
@@ -67,11 +73,16 @@ class CRTools(object):
   def ds_array(self, cg):
     # Gather all edge values from each of the local arrays on each process
     cg_vals = Vector()
-    cg.vector().gather(cg_vals, np.array(range(self.V_cg.dim()), dtype = 'intc'))
+    cg.vector().gather(cg_vals, np.array(range(self.V_cg.dim()), dtype = 'intc'))  
     
     # Get the two vertex values on each local edge
     local_vals0 = cg_vals[self.le_gv0] 
     local_vals1 = cg_vals[self.le_gv1]
+    
+    print (self.MPI_rank, "lv0", max(local_vals0 - self.e_v0.vector().array()))
+    print (self.MPI_rank, "lv1", max(local_vals1 - self.e_v1.vector().array()))
+    #print (self.MPI_rank, "ev0", self.e_v0.vector().array())
+    #print (self.MPI_rank, "ev1", self.e_v1.vector().array())
     
     return abs(local_vals0 - local_vals1) / self.e_lens.vector().array()
   
