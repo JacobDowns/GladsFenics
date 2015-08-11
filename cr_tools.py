@@ -23,8 +23,16 @@ class CRTools(object):
     # Create maps from local edges to global vertex dofs
     self.compute_le_gv_maps()
     
-    f = Function(self.V_cr)
-    self.ds(self.f_cg, f)
+    # We'll set up a form that allows us to take the derivative of CG functions
+    # over edges 
+    self.U = Function(V_cg)
+    # CR test function
+    v_cr = TestFunction(V_cr)
+    # Facet and tangent normals
+    n = FacetNormal(mesh)
+    t = as_vector([n[1], -n[0]])
+    # Directional derivative form
+    self.F = (dot(grad(self.U), t) * v_cr)('+') * dS
     
   # Copies a CR function to a facet function
   def copy_cr_to_facet(self, cr, ff) :
@@ -34,7 +42,6 @@ class CRTools(object):
     # Get the edge values corresponding to each local facet
     local_vals = cr_vals[self.lf_ge]    
     ff.array()[:] = local_vals
-     
   
   # Compute a map from local facets to indexes in a global array of edge values
   def compute_lf_ge_map(self):
@@ -76,15 +83,44 @@ class CRTools(object):
     cg.vector().gather(cg_vals, np.array(range(self.V_cg.dim()), dtype = 'intc'))  
     
     # Get the two vertex values on each local edge
-    local_vals0 = cg_vals[self.le_gv0] 
-    local_vals1 = cg_vals[self.le_gv1]
-    
-    print (self.MPI_rank, "lv0", max(local_vals0 - self.e_v0.vector().array()))
-    print (self.MPI_rank, "lv1", max(local_vals1 - self.e_v1.vector().array()))
-    #print (self.MPI_rank, "ev0", self.e_v0.vector().array())
-    #print (self.MPI_rank, "ev1", self.e_v1.vector().array())
+    local_vals0 = cg_vals.array()[self.le_gv0] 
+    local_vals1 = cg_vals.array()[self.le_gv1]
     
     return abs(local_vals0 - local_vals1) / self.e_lens.vector().array()
+
+  def ds_assemble(self, cg, cr):
+    self.U.assign(cg)
+    
+    # Get the height difference of two vertexes on each edge
+    A = abs(assemble(self.F).array())
+    # Now divide by the edge lens
+    dcg_ds = A / self.e_lens.vector().array()
+    
+    cr.vector().set_local(dcg_ds)
+    cr.vector().apply("insert")
+    
+  def test(self, cg):
+    cg_vals = Vector()
+    cg.vector().gather(cg_vals, np.array(range(self.V_cg.dim()), dtype = 'intc'))  
+    
+    local_vals0 = cg_vals.array()[self.le_gv0] 
+    local_vals1 = cg_vals.array()[self.le_gv1]
+    
+    edge_numbers = np.array(self.f_cr.vector().array(), dtype = 'int')
+    indexes = edge_numbers.argsort()
+    
+    v0 = np.array(local_vals0[indexes], dtype = 'int')
+    v1 = np.array(local_vals1[indexes], dtype = 'int')
+    
+    A = np.transpose([edge_numbers[indexes], v0, v1]) 
+    
+    out = "P" + str(self.MPI_rank) 
+    np.savetxt(out, A, fmt = "%i")
+
+    
+    #print(self.MPI_rank, "edges", edge_numbers[indexes][:100])
+    #print(self.MPI_rank, "vals0", local_vals0[indexes][:100])
+    #print(self.MPI_rank, "vals1", local_vals1[indexes][:100])   
   
   # Computes the value of a CG functions at the midpoint of edges and copies
   # the result to a CR function
@@ -99,8 +135,8 @@ class CRTools(object):
     cg.vector().gather(cg_vals, np.array(range(self.V_cg.dim()), dtype = 'intc'))
     
     # Get the two vertex values on each local edge
-    local_vals0 = cg_vals[self.le_gv0] 
-    local_vals1 = cg_vals[self.le_gv1]
+    local_vals0 = cg_vals.array()[self.le_gv0] 
+    local_vals1 = cg_vals.array()[self.le_gv1]
     
     return (local_vals0 + local_vals1) / 2.0
   

@@ -11,9 +11,9 @@ in_dir = "model_inputs/"
 # Directory of parallel maps
 maps_dir = "model_inputs/maps"
 # Output directory
-out_dir = "ouput_python/"
+out_dir = "out_ds/"
 # Checkpoint directory
-check_dir = "output_python/checkpoint/"
+check_dir = out_dir + "checkpoint/"
 # Process
 MPI_rank = MPI.rank(mpi_comm_world())
 
@@ -252,6 +252,7 @@ while ode_solver.t <= T :
   
   # Step the potential forward
   phi_solver.step(dt)
+  
   # Derive values for the ODE
   derive_values()  
 
@@ -288,7 +289,7 @@ while ode_solver.t <= T :
     out_dphi_ds << dphi_ds_f
     
   # Checkpoint
-  if i % 20 == 0:
+  if i % 1 == 0:
     File(check_dir + "h_" + str(i) + ".xml") << h
     File(check_dir + "S_" + str(i) + ".xml") << S
     File(check_dir + "phi_" + str(i) + ".xml") << phi
