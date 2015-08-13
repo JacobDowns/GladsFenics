@@ -1,6 +1,4 @@
 from dolfin import *
-from bdf import *
-from cr_tools import *
 from constants import *
 
 parameters['form_compiler']['precision'] = 30
@@ -33,7 +31,9 @@ class PotentialSolver(object):
     m = model_inputs['m']
     # Get boundary facet function
     boundaries = model_inputs['boundaries']
-
+    # List of boundary conditions    
+    bcs = model_inputs['bcs']
+  
     ### Set up the sheet model 
     
     # Unknown sheet thickness defined on continuous domain
@@ -87,7 +87,7 @@ class PotentialSolver(object):
     ### Set up the PDE for the potential ###
     
     # Measure for integrals o
-    ds = Measure("ds")[boundaries]
+    # ds = Measure("ds")[boundaries]
     theta = TestFunction(V_cg)
     
     # Constant in front of storage term
@@ -98,7 +98,7 @@ class PotentialSolver(object):
     # Sheet contribution to PDE
     F_s += dt * (-dot(grad(theta), q) + (w - v - m) * theta) * dx 
     # Robin type boundary conditon 
-    F_s += dt * Constant(0.00000005) * (phi - phi_m) * theta * ds(1)
+    #F_s += dt * Constant(0.00000005) * (phi - phi_m) * theta * ds(1)
     
     # Channel contribution to PDE
     F_c = dt * (-dot(grad(theta), t) * Q + (w_c - v_c) * theta)('+') * dS
@@ -120,15 +120,40 @@ class PotentialSolver(object):
     self.dt = dt
     self.F = F
     self.J = J
-    self.bcs = []
+    self.bcs = bcs
     self.newton_params = newton_params
     self.S_exp = S_exp
 
-  # Steps the potential forward by dt
+  # Steps the potential forward by dt. Returns true if the Newton solver converged or false if it
+  # had to use a smaller relaxation parameter.
   def step(self, dt):
-    # Solve for potential
-    self.dt.assign(dt)
-    solve(self.F == 0, self.phi, self.bcs, J = self.J, solver_parameters = self.newton_params)
-    # Update previous solution
-    self.phi_prev.assign(self.phi)
+    try :
+      # Solve for potential
+      self.dt.assign(dt)
+      solve(self.F == 0, self.phi, self.bcs, J = self.J, solver_parameters = self.newton_params)
+      # Update previous solution
+      self.phi_prev.assign(self.phi)
+    except :
+      # Remember the relaxation param
+      r = self.newton_params['newton_solver']['relaxation_parameter']
+
+      # Try the solve again with a lower relaxation param
+      self.newton_params['newton_solver']['relaxation_parameter'] = 0.5
+      self.newton_params['newton_solver']['error_on_nonconvergence'] = False
+
+      # Solve for potential
+      self.dt.assign(dt)
+      solve(self.F == 0, self.phi, self.bcs, J = self.J, solver_parameters = self.newton_params)
+      # Update previous solution
+      self.phi_prev.assign(self.phi)
+      
+      # Set the Newton parameters back 
+      self.newton_params['newton_solver']['relaxation_parameter'] = r
+      self.newton_params['newton_solver']['error_on_nonconvergence'] = True
+      
+      # Didn't converge with standard params
+      return False
+
+    # Did converge with standard params
+    return True
   
