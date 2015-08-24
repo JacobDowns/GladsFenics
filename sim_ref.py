@@ -148,15 +148,15 @@ def derive_values():
   # Derive effective pressure
   N.vector().set_local(phi_0_n - phi_n)
   N.vector().apply("insert")
-  # Set the downstream direction based on phi
+  # Effective pressure on midpoints
   cr_tools.midpoint(N, N_e)
   # Compute derivative of potential along channels
-  cr_tools.ds(phi, dphi_ds_e)
+  cr_tools.ds_assemble(phi, dphi_ds_e)
   # Derive the water pressure
   pw.vector().set_local(phi_n - phi_m_n)
   pw.vector().apply("insert")
   # Compute the derivative of pressure along channels
-  cr_tools.ds(pw, dpw_ds_e)
+  #cr_tools.ds(pw, dpw_ds_e)
   # Water pressure as a fraction of overburden
   pw_n = pw.vector().array()
   pfo.vector().set_local(pw_n / pi_n)
@@ -191,25 +191,16 @@ def f_S(t, S_n):
   h_n = h_e.vector().array()
   # Array form of the derivative of the potential 
   phi_s = dphi_ds_e.vector().array()  
-  # Array from of derivatives of water pressure
-  pw_s = dpw_ds_e.vector().array()
   # Along channel flux
   Q_n = -k_c * S_n**alpha * abs(phi_s + phi_reg)**delta * phi_s
   # Flux of sheet under channel
   q_n = -k * h_n**alpha * abs(phi_s + phi_reg)**delta * phi_s
   # Dissipation melting due to turbulent flux
   Xi_n = abs(Q_n * phi_s) + abs(l_c * q_n * phi_s)
-  # Turn off pressure melting if S<=0
-  f_n = S_n > 0
-  # PMP term
-  Pi_n = c_t * c_w * rho_w * (Q_n + f_n * l_c * q_n) * pw_s
-  #cr_out.vector().set_local(pw_s - phi_s)
-  #cr_out.vector().apply("insert")  
-  #cr_tools.copy_cr_to_facet(cr_out, f_out)
   # Creep closure
   v_c_n = A * S_n * N_n**3
   # Total opening rate
-  v_o_n = (Xi_n - Pi_n) / (rho_i * L)
+  v_o_n = Xi_n / (rho_i * L)
   # Disallow negative opening rate where the channel area is 0
   v_o_n[v_o_n[S_n == 0.0] < 0.0] = 0.0
   # Calculate rate of channel size change
@@ -294,17 +285,18 @@ while ode_solver.t <= T :
   S_exp.vector().set_local(S_exp_n)
   S_exp.vector().apply("insert")
   
-  if i % 1 == 0:
+  if i % 16 == 0:
     # Output a bunch of stuff
     out_h << h
     out_phi << phi
     out_pfo << pfo
-
+    out_N_e << N_e
+  
     cr_tools.copy_cr_to_facet(S, S_f)
     out_S << S_f
     
   # Checkpoint
-  if i % 48 == 0:
+  if i % 96 == 0:
     File(check_dir + "h_" + str(i) + ".xml") << h
     File(check_dir + "S_" + str(i) + ".xml") << S
     File(check_dir + "phi_" + str(i) + ".xml") << phi
