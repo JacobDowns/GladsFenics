@@ -6,6 +6,7 @@ Created on Mon Mar 16 15:07:37 2015
 """
 from dolfin import *
 import numpy as np
+from cr_tools import *
 
 # Writes out several functions that are needed in parallel 
 class ParallelMapGen():
@@ -78,6 +79,7 @@ class ParallelMapGen():
   
   # Writes out several functions to xml that will be used in parallel
   def write_maps(self, out_dir):
+    
     # Create a CR function that will be used in parallel to determine the
     # global edge order
     f_cr = Function(self.V_cr)
@@ -106,6 +108,7 @@ class ParallelMapGen():
     f_cg = Function(self.V_cg)
     f_cg.vector()[:] = np.array(range(self.V_cg.dim()))
     File(out_dir + "/f_cg.xml") << f_cg
+    File(out_dir + "/f_cg.pvd") << f_cg
     
     # Finally, compute the length of each edge, which will be used to compute
     # derivatives of CG functions over edges

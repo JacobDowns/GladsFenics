@@ -78,11 +78,19 @@ class PotentialSolver(object):
     q_c = -Constant(k) * h**alpha * abs(dphi_ds + Constant(phi_reg))**delta * dphi_ds
     # Energy dissipation 
     Xi = abs(Q * dphi_ds) + abs(Constant(l_c) * q_c * dphi_ds)
-    # Another channel source term
-    w_c = (Xi / Constant(L)) * Constant((1. / rho_i) - (1. / rho_w))
     # Channel creep closure rate
     v_c = Constant(A) * S * N**3
-
+    # Derivative of water pressure along channels
+    dpw_ds = dot(grad(phi - phi_m), t)
+    # Constant in front of pressure melting term
+    C_Pi = Constant(-c_t * c_w * rho_w)
+    # Turn off pressure melting if S<=0
+    f = conditional(gt(S, 0.0), 1.0, 0.0)
+    # Pressure melting term
+    Pi = C_Pi * (Q + f * Constant(l_c) * q_c) * dpw_ds
+    # Another channel source term
+    w_c = ((Xi - Pi) / Constant(L)) * Constant((1. / rho_i) - (1. / rho_w))
+    
 
     ### Set up the PDE for the potential ###
     
