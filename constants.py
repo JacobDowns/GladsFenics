@@ -27,7 +27,7 @@ c_t = 7.5e-8
 # Latent heat (J / kg)
 L = 3.34e5
 # Void storage ratio
-e_v = 1e-2
+e_v = 1e-3
 # Exponents 
 alpha = 5. / 4.
 beta = 3. / 2.
