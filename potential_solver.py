@@ -29,10 +29,20 @@ class PotentialSolver(object):
     u_b = model_inputs['u_b']
     # Get melt rate
     m = model_inputs['m']
+    
     # Get boundary facet function
     boundaries = model_inputs['boundaries']
-    # List of boundary conditions    
-    bcs = model_inputs['bcs']
+    # List of Dirichlet boundary conditions    
+    d_bcs = model_inputs['d_bcs']
+    # List of Robin boundary conditions. Format is a list of tuples with the first
+    # entry the marker value for the boundary facet function, and the second value 
+    # a constant that defines how much outflow there is at different pressures
+    r_bcs = model_inputs['r_bcs']
+    # List of Neumann boundary conditions. Format is a list of tuples with the first
+    # entry the marker value for the boundary facet function, and the second value
+    # a constant that defines the rate of outflow
+    #n_bcs = model_inputs['n_bcs']
+    
   
     ### Set up the sheet model 
     
@@ -87,7 +97,7 @@ class PotentialSolver(object):
     ### Set up the PDE for the potential ###
     
     # Measure for integrals o
-    # ds = Measure("ds")[boundaries]
+    ds = Measure("ds")[boundaries]
     theta = TestFunction(V_cg)
     
     # Constant in front of storage term
@@ -97,7 +107,11 @@ class PotentialSolver(object):
     # Sheet contribution to PDE
     F_s += dt * (-dot(grad(theta), q) + (w - v - m) * theta) * dx 
     # Robin type boundary conditon 
-    #F_s += dt * Constant(0.00000005) * (phi - phi_m) * theta * ds(1)
+    # F_s += dt * Constant(0.00000005) * (phi - phi_m) * theta * ds(1)
+    
+    # Add Robin 
+    for (m, c) in r_bcs: 
+      F_s += dt * Constant(c) * (phi - phi_m) * theta * ds(m)
     
     # Channel contribution to PDE
     F_c = dt * (-dot(grad(theta), t) * Q + (w_c - v_c) * theta)('+') * dS
@@ -119,7 +133,7 @@ class PotentialSolver(object):
     self.dt = dt
     self.F = F
     self.J = J
-    self.bcs = bcs
+    self.d_bcs = d_bcs
     self.newton_params = newton_params
     self.S_exp = S_exp
 
@@ -129,7 +143,7 @@ class PotentialSolver(object):
     try :
       # Solve for potential
       self.dt.assign(dt)
-      solve(self.F == 0, self.phi, self.bcs, J = self.J, solver_parameters = self.newton_params)
+      solve(self.F == 0, self.phi, self.d_bcs, J = self.J, solver_parameters = self.newton_params)
       # Update previous solution
       self.phi_prev.assign(self.phi)
     except :
@@ -142,7 +156,7 @@ class PotentialSolver(object):
 
       # Solve for potential
       self.dt.assign(dt)
-      solve(self.F == 0, self.phi, self.bcs, J = self.J, solver_parameters = self.newton_params)
+      solve(self.F == 0, self.phi, self.d_bcs, J = self.J, solver_parameters = self.newton_params)
       # Update previous solution
       self.phi_prev.assign(self.phi)
       
