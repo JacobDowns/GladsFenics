@@ -12,6 +12,8 @@ class HSSolver():
     
     # Effective pressure
     N = model.N   
+    # Sheet height on edges
+    h_cr = model.h_cr
     # Effective pressure on edges
     N_cr = model.N_cr
     # Derivative of phi over edges    
@@ -19,22 +21,24 @@ class HSSolver():
     # Initial model time
     t0 = model.t
     # Rate factor
-    A = model.constants['A']
+    A = model.pcs['A']
     # Distance between bumps
-    l_r = model.constants['l_r']
+    l_r = model.pcs['l_r']
     # Bump height
-    h_r = model.constants['h_r']
+    h_r = model.pcs['h_r']
     # Density of ice
-    rho_i = model.constants['rho_i']
+    rho_i = model.pcs['rho_i']
     # Latent heat
-    L = model.constants['L']
+    L = model.pcs['L']
     # Sheet conductivity
-    k = model.constants['k']
+    k = model.pcs['k']
     # Channel conductivity
-    k_c = model.constants['k_c']
+    k_c = model.pcs['k_c']
+    # Sheet width under channel
+    l_c = model.pcs['l_c']
     # Exponent
-    alpha = model.constants['alpha']
-    delta = model.constants['delta']
+    alpha = model.pcs['alpha']
+    delta = model.pcs['delta']
     # Regularization parameter
     phi_reg = 1e-16   
     
@@ -42,7 +46,7 @@ class HSSolver():
     ### Static arrays used in the ODE rhs
     
     # Mask used to prevent opening on exterior edges
-    local_mask = mask.vector().array()
+    local_mask = model.mask.vector().array()
     # Vector for sliding speed
     u_b_n = model.u_b.vector().array()
     # Initial sheet height
@@ -53,7 +57,7 @@ class HSSolver():
     h_len = len(h0) 
     
 
-    ### Set up the sheet height ODE
+    ### Set up the sheet height and channel area ODEs
     
     # Right hand side for the gap height ODE
     def h_rhs(t, h_n) :
@@ -76,7 +80,7 @@ class HSSolver():
       # Get effective pressures, sheet thickness on edges.
       N_n = N_cr.vector().array()
       # Get midpoint values of sheet thickness
-      h_n = h_e.vector().array()
+      h_n = h_cr.vector().array()
       # Array form of the derivative of the potential 
       phi_s = dphi_ds_cr.vector().array()  
       # Along channel flux
@@ -101,8 +105,8 @@ class HSSolver():
       h_n = Ys[0]
       S_n = Ys[1]
       
-      dhdt = f_h(t, h_n)
-      dsdt = f_S(t, S_n)
+      dhdt = h_rhs(t, h_n)
+      dsdt = S_rhs(t, S_n)
       
       return np.hstack((dhdt, dsdt))
     
@@ -121,7 +125,7 @@ class HSSolver():
     
 
   # Step the gap height h forward by dt
-  def solve(self, dt):
+  def step(self, dt):
     # Step h and S forward
     self.ode_solver.integrate(self.model.t + dt)
 
@@ -131,6 +135,9 @@ class HSSolver():
     self.model.h.vector().apply("insert")
     self.model.S.vector().set_local(Y[1])
     self.model.S.vector().apply("insert")
+    
+    # Update S**alpha
+    self.model.update_S_alpha()
   
     # Update the model time
     self.model.t = self.ode_solver.t

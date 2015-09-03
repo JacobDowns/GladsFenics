@@ -1,5 +1,4 @@
 from dolfin import *
-from constants import *
 
 class PhiSolver(object):
   
@@ -11,6 +10,9 @@ class PhiSolver(object):
     h = model.h
     # Channel areas
     S = model.S
+    # This function stores the value of S**alpha. It's necessary due to a bug
+    # in Fenics that causes problems exponentiating a CR function
+    S_alpha = model.S_alpha
     # Basal sliding speed
     u_b = model.u_b
     # Potential
@@ -20,34 +22,34 @@ class PhiSolver(object):
     # Potential at overburden pressure
     phi_0 = model.phi_0
     # Density of ice
-    rho_i = model.constants['rho_i']
+    rho_i = model.pcs['rho_i']
     # Density of water
-    rho_w = model.constants['rho_w']
+    rho_w = model.pcs['rho_w']
     # Rate factor
-    A = model.constants['A']
+    A = model.pcs['A']
     # Sheet conductivity
-    k = model.constants['k']
+    k = model.pcs['k']
     # Channel conductivity
-    k_c = model.constants['k_c']
+    k_c = model.pcs['k_c']
     # Bump height
-    h_r = model.constants['h_r']
+    h_r = model.pcs['h_r']
     # Distance between bumps
-    l_r = model.constants['l_r']
+    l_r = model.pcs['l_r']
     # Sheet width under channel
-    l_c = model.constants['l_c']
+    l_c = model.pcs['l_c']
     # Latent heat
-    L = model.constants['L']
+    L = model.pcs['L']
     # Void storage ratio
-    e_v = model.constants['e_v']
+    e_v = model.pcs['e_v']
     # Gravitational acceleration
-    g = model.constants['g']
+    g = model.pcs['g']
     # Exponents
-    alpha = model.constants['alpha']
-    delta = model.constants['delta']
-    # Constants in front of storage term
+    alpha = model.pcs['alpha']
+    delta = model.pcs['delta']
+    # pcs in front of storage term
     c1 = e_v / (rho_w * g)
     # Regularization parameter
-    phi_reg = 1e-16
+    phi_reg = 1e-15
     
   
     ### Set up the sheet model 
@@ -66,11 +68,8 @@ class PhiSolver(object):
 
     ### Set up the channel model 
     
-    # This function stores the value of S**alpha. It's necessary due to a bug
-    # in Fenics that causes problems exponentiating a CR function
-    S_alpha = Function(V_cr)
     # Normal and tangent vectors 
-    n = FacetNormal(mesh)
+    n = FacetNormal(model.mesh)
     t = as_vector([n[1], -n[0]])
     # Derivative of phi along channel 
     dphi_ds = dot(grad(phi), t)
@@ -89,8 +88,8 @@ class PhiSolver(object):
     ### Set up the PDE for the potential ###
     
     # Measure for integrals over mesh boundaries
-    ds = Measure("ds")[boundaries]
-    theta = TestFunction(V_cg)
+    ds = Measure("ds")[model.boundaries]
+    theta = TestFunction(model.V_cg)
     
     # Constant in front of storage term
     C1 = Constant(c1)
@@ -109,7 +108,7 @@ class PhiSolver(object):
     F = F_s + F_c
     
     # Get the Jacobian
-    dphi = TrialFunction(V_cg)
+    dphi = TrialFunction(model.V_cg)
     J = derivative(F, phi, dphi) 
     
     
@@ -118,38 +117,36 @@ class PhiSolver(object):
     self.F = F
     self.J = J
     self.model = model
+    self.dt = dt
 
 
   # Steps the potential forward by dt. Returns true if the Newton solver converged or false if it
   # had to use a smaller relaxation parameter.
   def step(self, dt):
+
     self.dt.assign(dt)
     
     try :
       # Solve for potential
-      solve(self.F == 0, model.phi, model.d_bcs, J = self.J, solver_parameters = model.newton_params)
+      solve(self.F == 0, self.model.phi, self.model.d_bcs, J = self.J, solver_parameters = self.model.newton_params)
       
-      # Update previous solution
-      self.phi_prev.assign(self.phi)
       # Derive values from the new potential 
-      self.update_phi()
+      self.model.update_phi()
     except :
       # Remember the relaxation parameter
-      r = model.newton_params['newton_solver']['relaxation_parameter']
+      r = self.model.newton_params['newton_solver']['relaxation_parameter']
 
       # Try the solve again with a lower relaxation param
-      model.newton_params['newton_solver']['relaxation_parameter'] = 0.7
-      model.newton_params['newton_solver']['error_on_nonconvergence'] = False
-      solve(self.F == 0, self.phi, self.d_bcs, J = self.J, solver_parameters = self.newton_params)
+      self.model.newton_params['newton_solver']['relaxation_parameter'] = 0.7
+      self.model.newton_params['newton_solver']['error_on_nonconvergence'] = False
+      solve(self.F == 0, self.model.phi, self.model.d_bcs, J = self.J, solver_parameters = self.model.newton_params)
 
-      # Update previous solution
-      self.phi_prev.assign(self.phi)
       # Derive values from potential
       self.update_phi()
       
       # Set the Newton parameters back 
-      self.newton_params['newton_solver']['relaxation_parameter'] = r
-      self.newton_params['newton_solver']['error_on_nonconvergence'] = True
+      self.model.newton_params['newton_solver']['relaxation_parameter'] = r
+      self.model.newton_params['newton_solver']['error_on_nonconvergence'] = True
       
       # Didn't converge with standard params
       return False

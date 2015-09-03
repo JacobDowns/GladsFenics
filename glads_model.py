@@ -45,12 +45,27 @@ class GladsModel():
     # A cr function mask that is 1 on interior edges and 0 on exterior edges. 
     # Used to prevent opening on exterior edges.
     self.mask = self.model_inputs['mask']
-    # Newton solver parameters
-    self.newton_params = self.model_inputs['newton_params']
     # Directory storing maps that are used to deal with CR functions in parallel
     self.maps_dir = self.model_inputs['maps_dir']
     # Facet function marking boundaries
     self.boundaries = self.model_inputs['boundaries']
+    # Output directory
+    self.out_dir = self.model_inputs['out_dir']
+
+    # If the Newton parameters are specified use them. Otherwise use some
+    # defaults
+    if 'newton_params' in self.model_inputs:
+      self.newton_params = self.model_inputs['newton_params']
+    else :
+      prm = NonlinearVariationalSolver.default_parameters()
+      prm['newton_solver']['relaxation_parameter'] = 0.95
+      prm['newton_solver']['relative_tolerance'] = 5e-6
+      prm['newton_solver']['absolute_tolerance'] = 5e-3
+      prm['newton_solver']['error_on_nonconvergence'] = False
+      prm['newton_solver']['maximum_iterations'] = 50
+      prm['newton_solver']['linear_solver'] = 'mumps'
+      
+      self.newton_params = prm
     
     # Neumann (flux) boundary conditions
     self.n_bcs = []
@@ -60,15 +75,19 @@ class GladsModel():
     # If there is a dictionary of physical constants specified, use it. 
     # Otherwise use the defaults. 
     if 'constants' in self.model_inputs :
-      self.constants = self.model_inputs['constants']
+      self.pcs = self.model_inputs['constants']
     else :
-      self.constants = physical_constants
+      self.pcs = pcs
     
 
     ### Set up a few more things we'll need
 
+    # Function spaces
     self.V_cg = FunctionSpace(self.mesh, "CG", 1)
     self.V_cr = FunctionSpace(self.mesh, "CR", 1)
+    
+    # Object for dealing with CR functions in parallel
+    self.cr_tools = CRTools(self.mesh, self.V_cg, self.V_cr, self.maps_dir)
 
     # Potential
     self.phi = Function(self.V_cg)
@@ -81,14 +100,26 @@ class GladsModel():
     # Sheet height on edges
     self.h_cr = Function(self.V_cr)
     self.update_h_cr()
+    # Stores the value of S**alpha. A workaround for a bug in Fenics that
+    # causes problems when exponentiating a CR function
+    self.S_alpha = Function(self.V_cr)
+    self.update_S_alpha()
     # Water pressure
     self.p_w = Function(self.V_cg)
     # Pressure as a fraction of overburden
     self.pfo = Function(self.V_cg)
     # Current time
     self.t = 0.0
-    # Object for dealing with CR functions in parallel
-    self.cr_tools = CRTools(self.mesh, self.V_cg, self.V_cr, self.maps_dir)
+    
+    
+    ### Output files
+    
+    # Facet function for writing cr functions to pvd files
+    self.ff_out = FacetFunctionDouble(self.mesh)
+    self.S_out = File(self.out_dir + "S.pvd")
+    self.h_out = File(self.out_dir + "h.pvd")
+    self.phi_out = File(self.out_dir + "phi.pvd")
+    self.pfo_out = File(self.out_dir + "pfo.pvd")
 
 
     ### Create the solver objects
@@ -99,12 +130,12 @@ class GladsModel():
     self.hs_solver = HSSolver(self)
     
 
-  # Steps the potential, gap height, and water height forward by dt  
-  def solve(self, dt):
-    # Step the potential forward by dt with h fixed
-    self.phi_solver.solve()
-    # Step h forward by dt with phi fixed
-    self.h_solver.solve(dt)
+  # Steps phi, h, and S forwardt by dt
+  def step(self, dt):
+    # Step the potential forward by dt with h and S fixes
+    self.phi_solver.step(dt)
+    # Step h and S forward with phi fixed
+    self.hs_solver.step(dt)
     
     
   # Load all model inputs from a directory except for the mesh and initial 
@@ -166,9 +197,10 @@ class GladsModel():
   def update_pfo(self):
     # Update water pressure
     self.update_pw()
+  
     # Compute overburden pressure
     self.pfo.vector().set_local(self.p_w.vector().array() / self.p_i.vector().array())
-    self.pfo.apply("insert")
+    self.pfo.vector().apply("insert")
 
     
   # Update the edge derivatives of the potential to reflect current value of phi
@@ -193,4 +225,21 @@ class GladsModel():
   # Update the edge midpoint values h_cr to reflect the current value of h
   def update_h_cr(self):
     self.cr_tools.midpoint(self.h, self.h_cr)
+    
+  
+  # Update S**alpha to reflect current value of S
+  def update_S_alpha(self):
+    alpha = self.pcs['alpha']
+    self.S_alpha.vector().set_local(self.S.vector().array()**alpha)
+    
+  
+  # Write h, S, pfo, and phi to pvd files
+  def write_pvds(self):
+    self.cr_tools.copy_cr_to_facet(self.S, self.ff_out)
+    self.S_out << self.S
+    self.h_out << self.h
+    self.phi_out << self.phi
+    self.pfo_out << self.pfo
+  
+  
     
