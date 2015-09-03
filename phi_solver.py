@@ -1,5 +1,7 @@
 from dolfin import *
 
+""" Solves phi with h and S fixed."""
+
 class PhiSolver(object):
   
   def __init__(self, model):
