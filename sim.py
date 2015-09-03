@@ -1,11 +1,14 @@
 from dolfin import *
 from glads_model import *
 from constants import *
+from dolfin import MPI, mpi_comm_world
 
 # Model input directory
 in_dir = "inputs_slope/"
 # Output directory
 out_dir = "out/"
+# Process number
+MPI_rank = MPI.rank(mpi_comm_world())
 
 # Load mesh and create function spaces
 mesh = Mesh(in_dir + "mesh.xml")
@@ -64,11 +67,12 @@ S_out = File(out_dir + "S.pvd")
 h_out = File(out_dir + "h.pvd")
 
 while model.t < T:
-  current_time = model.t / spd
-  print "Current Time: " + str(current_time)
+  if MPI_rank == 0: 
+    current_time = model.t / spd
+    print "Current Time: " + str(current_time)
   
   model.step(dt)
-  
   model.write_pvds()
   
-  print
+  if MPI_rank == 0: 
+    print
