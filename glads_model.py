@@ -4,6 +4,8 @@ from constants import *
 from hs_solver import *
 from phi_solver import *
 
+""" Wrapper class for Mauro's Glads model"""
+
 class GladsModel():
 
   def __init__(self, model_inputs, in_dir = None):
@@ -22,7 +24,7 @@ class GladsModel():
       
     # Ice thickness    
     self.H = self.model_inputs['H']
-    # Bed elevation
+    # Bed elevation       
     self.B = self.model_inputs['B']
     # Basal sliding speed
     self.u_b = self.model_inputs['u_b']
@@ -236,7 +238,7 @@ class GladsModel():
   # Write h, S, pfo, and phi to pvd files
   def write_pvds(self):
     self.cr_tools.copy_cr_to_facet(self.S, self.ff_out)
-    self.S_out << self.S
+    self.S_out << self.ff_out
     self.h_out << self.h
     self.phi_out << self.phi
     self.pfo_out << self.pfo

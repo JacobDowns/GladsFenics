@@ -61,10 +61,8 @@ spd = pcs['spd']
 T = 10.0 * spd
 # Time step
 dt = 60.0 * 30.0
-
-ff_out = FacetFunctionDouble(mesh)
-S_out = File(out_dir + "S.pvd")
-h_out = File(out_dir + "h.pvd")
+# Irataion count
+i = 0
 
 while model.t < T:
   if MPI_rank == 0: 
@@ -72,7 +70,9 @@ while model.t < T:
     print "Current Time: " + str(current_time)
   
   model.step(dt)
-  model.write_pvds()
+  
+  if i % 24 == 0:
+    model.write_pvds()
   
   if MPI_rank == 0: 
     print
