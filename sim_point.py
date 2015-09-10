@@ -46,6 +46,9 @@ def point_boundary(x, on_boundary):
 # Enforce 0 pressure bc at that point
 bc = DirichletBC(V_cg, phi_m, point_boundary, "pointwise")
 
+pcs['k'] = 5e-4
+pcs['k_c'] = 0.05
+
 model_inputs = {}
 model_inputs['mesh'] = mesh
 model_inputs['h_init'] = h_init
@@ -54,10 +57,10 @@ model_inputs['phi_init'] = phi_init
 model_inputs['d_bcs'] = [bc]
 model_inputs['maps_dir'] = in_dir + "maps/"
 model_inputs['out_dir'] = out_dir
+model_inputs['constants'] = pcs
 
 # Create the Glads model
 model = GladsModel(model_inputs, in_dir)
-
 
 
 ### Run the simulation

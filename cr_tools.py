@@ -34,6 +34,9 @@ class CRTools(object):
     # Directional derivative form
     self.F = (dot(grad(self.U), t) * v_cr)('+') * dS
     
+    # Facet function for plotting 
+    self.ff_plot = FacetFunctionDouble(mesh)
+    
   # Copies a CR function to a facet function
   def copy_cr_to_facet(self, cr, ff) :
     # Gather all edge values from each of the local arrays on each process
@@ -165,3 +168,8 @@ class CRTools(object):
     # Edge lengths
     self.e_lens = Function(self.V_cr)
     File(self.maps_dir + "/e_lens.xml") >> self.e_lens
+  
+  # Plots a CR function
+  def plot_cr(self, cr):
+    self.copy_cr_to_facet(cr, self.ff_plot)
+    plot(self.ff_plot, interactive = True)

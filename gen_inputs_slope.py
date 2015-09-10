@@ -48,7 +48,7 @@ depth = 200.0
       
 class Bed(Expression):
   def eval(self,value,x):
-    value[0] = sin(pi / 360) * x[0]
+    value[0] = sin(pi / 180) * x[0]
 
 class Surface(Expression):
   def eval(self,value,x):
