@@ -1,6 +1,6 @@
 """
 This script generates all fields such as ice thickness, bed elevation, and melt
-needed to run the model. 
+needed to run the model for an ice sheet with a sloped bed.
 """
 
 from dolfin import *
@@ -8,11 +8,11 @@ from parallel_map_gen import *
 from constants import *
 
 # Directory to write model inputs
-out_dir = "inputs_thin_margin/"
+out_dir = "inputs_slope/"
 # Directory to write parallel maps
 maps_dir = out_dir + "maps"
 
-mesh = Mesh("inputs_thin_margin/ref_mesh.xml")
+mesh = Mesh("inputs_slope/mesh.xml")
 V_cg = FunctionSpace(mesh, "CG", 1)
 V_cr = FunctionSpace(mesh, "CR", 1)
 
@@ -23,40 +23,43 @@ map_gen = ParallelMapGen(mesh)
 map_gen.write_maps(maps_dir)
 
 
-# Maximum ice thickness
-H_max = 1500.0
-# Length of ice sheet
-L = 60e3
-# Length of flat region
-F = 5e3
-
-
-# Bed topography
-class Bed(Expression):
-  def eval(self,value,x):
-    x = max(x[0] - F, 1.0)
-    value[0] = sin(0.5 * pi / 180) * x
-  
-B = project(Bed(), V_cg)
-
-# Surface topography 
-class Surface(Expression):
-  def eval(self,value,x):
-    x = max(x[0] - F, 1.0)
-    value[0] = x              
-    value[0] = max( sqrt(x * H_max**2 / L) , 1.0)
-    
-S = project(Surface(), V_cg)
-
-# Thickness
-H = project(S - B, V_cg)
-
-
 ### Create a melt function (m/s)
 m = project(Expression("(1.0 + 1.5 * (50000.0 - x[0]) / 50000.0) / 31536000.0"), V_cg)
-
 File(out_dir + "m.xml") << m
 File(out_dir + "m.pvd") << m
+
+
+#### Create a sliding sliding speed (m/s)
+u_b = project(Expression("(10.0 + 240.0 * (50000.0 - x[0]) / 50000.0) / 31536000.0"), V_cg)
+File(out_dir + "u_b.xml") << u_b
+File(out_dir + "u_b.pvd") << u_b
+
+
+### Create bed and surface functions
+
+# Maximum ice thickness
+h_max = 1500.
+# Length of ice sheet 
+length = 50e3
+# Center of trough 
+center = 10e3
+# Maximum trough depth
+depth = 200.0
+      
+class Bed(Expression):
+  def eval(self,value,x):
+    value[0] = sin(pi / 180) * x[0]
+
+class Surface(Expression):
+  def eval(self,value,x):
+    value[0] = sqrt((x[0] + 50.0) * h_max**2 / length)
+
+# Surface
+S = project(Surface(), V_cg)
+# Bed elevation
+B = project(Bed(), V_cg)
+# Ice thickness
+H = project(S - B, V_cg)
 
 File(out_dir + "B.xml") << B
 File(out_dir + "B.pvd") << B
@@ -64,15 +67,26 @@ File(out_dir + "B.pvd") << B
 File(out_dir + "H.xml") << H
 File(out_dir + "H.pvd") << H
 
-File(out_dir + "m.xml") << m
-File(out_dir + "m.pvd") << m
+plot(B, interactive = True)
+plot(H, interactive = True)
 
+rho_i = pcs['rho_i']
+rho_w = pcs['rho_w']
+g = pcs['g']
 
-#### Create a sliding sliding speed (m/s)
-u_b = project(Expression("(10.0 + 240.0 * (50000.0 - x[0]) / 50000.0) / 31536000.0"), V_cg)
+# Potential at 0 pressure
+phi_m = project(rho_w * g * B, V_cg)
+# Overburden pressure
+p_i = project(rho_i * g * H, V_cg)
+# Potential at overburden pressure
+phi_0 = project(phi_m + p_i, V_cg)
 
-File(out_dir + "u_b.xml") << u_b
-File(out_dir + "u_b.pvd") << u_b
+File(out_dir + "phi_m.xml") << phi_m
+File(out_dir + "phi_m.pvd") << phi_m
+File(out_dir + "p_i.xml") << p_i
+File(out_dir + "p_i.pvd") << p_i
+File(out_dir + "phi_0.xml") << phi_0
+File(out_dir + "phi_0.pvd") << phi_0
 
 
 ### Create a facet function with marked boundaries

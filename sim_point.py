@@ -3,10 +3,12 @@ from glads_model import *
 from constants import *
 from dolfin import MPI, mpi_comm_world
 
+np.set_printoptions(suppress = True)
+
 # Model input directory
 in_dir = "inputs_slope/"
 # Output directory
-out_dir = "out/"
+out_dir = "out_point/"
 # Process number
 MPI_rank = MPI.rank(mpi_comm_world())
 
@@ -37,8 +39,15 @@ File(in_dir + "boundaries.xml") >> boundaries
 phi_m = Function(V_cg)
 File(in_dir + "phi_m.xml") >> phi_m
 
-# Enforce 0 pressure bc at margin
-bc = DirichletBC(V_cg, phi_m, boundaries, 1)
+# Mark one point on the margin to be the outlet
+def point_boundary(x, on_boundary):
+  return near(x[0], 0.0) and abs(x[1] - 10100.0) < 200.0
+
+# Enforce 0 pressure bc at that point
+bc = DirichletBC(V_cg, phi_m, point_boundary, "pointwise")
+
+pcs['k'] = 5e-4
+pcs['k_c'] = 0.05
 
 model_inputs = {}
 model_inputs['mesh'] = mesh
@@ -48,6 +57,7 @@ model_inputs['phi_init'] = phi_init
 model_inputs['d_bcs'] = [bc]
 model_inputs['maps_dir'] = in_dir + "maps/"
 model_inputs['out_dir'] = out_dir
+model_inputs['constants'] = pcs
 
 # Create the Glads model
 model = GladsModel(model_inputs, in_dir)
@@ -58,7 +68,7 @@ model = GladsModel(model_inputs, in_dir)
 # Seconds per day
 spd = pcs['spd']
 # End time
-T = 10.0 * spd
+T = 50.0 * spd
 # Time step
 dt = 60.0 * 30.0
 # Irataion count
@@ -71,7 +81,7 @@ while model.t < T:
   
   model.step(dt)
   
-  if i % 24 == 0:
+  if i % 2 == 0:
     model.write_pvds()
   
   if MPI_rank == 0: 
